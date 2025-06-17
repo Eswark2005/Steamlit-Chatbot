@@ -72,8 +72,7 @@ def chat_ui():
             st.session_state.logged_in = False
             st.session_state.email = ""
             st.session_state.active_session = None
-            st.experimental_rerun()
-            st.stop()
+             st.rerun()  # New API: No need for st.stop()
 
     # ========== MAIN CHAT PANEL ==========
     with right:
