@@ -6,7 +6,7 @@ from datetime import datetime
 # ========== PAGE CONFIG ==========
 st.set_page_config(page_title="💬 Chatbot | Groq", layout="wide")
 
-# ========== SESSION STATE ==========
+# ========== SESSION STATE SETUP ==========
 if 'users' not in st.session_state:
     st.session_state.users = {}
 if 'logged_in' not in st.session_state:
@@ -23,26 +23,26 @@ GROQ_API_KEY = "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"
 MODEL_ID = "meta-llama/llama-4-scout-17b-16e-instruct"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# ========== AUTH ==========
+# ========== AUTH FUNCTIONS ==========
 def signup():
     st.subheader("🔐 Signup")
     email = st.text_input("Email", key="signup_email")
     password = st.text_input("Password", type="password", key="signup_password")
     if st.button("Create Account"):
-        if email in st.session_state.users:
-            st.error("User already exists.")
-        elif not email or not password:
+        if not email or not password:
             st.warning("Please fill in all fields.")
+        elif email in st.session_state.users:
+            st.error("User already exists.")
         else:
             st.session_state.users[email] = password
-            st.success("Account created. You can log in now!")
+            st.success("Account created! You can now log in.")
 
 def login():
     st.subheader("🔓 Login")
     email = st.text_input("Email", key="login_email")
     password = st.text_input("Password", type="password", key="login_password")
     if st.button("Login"):
-        if email in st.session_state.users and st.session_state.users[email] == password:
+        if st.session_state.users.get(email) == password:
             st.session_state.logged_in = True
             st.session_state.email = email
             st.success("Login successful!")
@@ -53,14 +53,15 @@ def login():
 def chat_ui():
     left, right = st.columns([1, 4])
 
+    # ========== SIDEBAR ==========
     with left:
         st.markdown(f"**👤 `{st.session_state.email}`**")
         st.subheader("📁 Sessions")
 
         if st.button("➕ New Chat"):
-            name = f"Chat {len(st.session_state.sessions)+1} - {datetime.now().strftime('%H:%M:%S')}"
-            st.session_state.sessions[name] = []
-            st.session_state.active_session = name
+            chat_name = f"Chat {len(st.session_state.sessions) + 1} - {datetime.now().strftime('%H:%M:%S')}"
+            st.session_state.sessions[chat_name] = []
+            st.session_state.active_session = chat_name
 
         for chat_name in st.session_state.sessions:
             if st.button(chat_name, key=chat_name):
@@ -71,8 +72,10 @@ def chat_ui():
             st.session_state.logged_in = False
             st.session_state.email = ""
             st.session_state.active_session = None
-            st.experimental_rerun() 
+            st.experimental_rerun()
             st.stop()
+
+    # ========== MAIN CHAT PANEL ==========
     with right:
         if not st.session_state.active_session:
             st.info("Start a new chat to begin.")
@@ -81,7 +84,7 @@ def chat_ui():
         st.title("💬 Chat with Groq LLaMA 4")
         st.markdown(f"### 🧠 {st.session_state.active_session}")
 
-        # ========== Chat Style ==========
+        # Chat bubble styling
         st.markdown("""
         <style>
         .chat-box {
@@ -137,20 +140,17 @@ def chat_ui():
             html += '</div>'
             chat_placeholder.markdown(html, unsafe_allow_html=True)
 
-        # Initial render
+        # Render chat initially
         render_chat()
 
-        # ========== Input Below ==========
+        # ========== INPUT + SEND ==========
         col1, col2 = st.columns([5, 1])
         with col1:
             prompt = st.text_input("Your message:", label_visibility="collapsed", placeholder="Type your message here")
         with col2:
             send_clicked = st.button("Send")
 
-        if send_clicked:
-            if not prompt.strip():
-                st.warning("Please enter a message.")
-                return
+        if send_clicked and prompt.strip():
             try:
                 headers = {
                     "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -160,6 +160,7 @@ def chat_ui():
                     "model": MODEL_ID,
                     "messages": [{"role": "user", "content": prompt}]
                 }
+
                 res = requests.post(GROQ_URL, headers=headers, json=payload)
                 res.raise_for_status()
                 reply = res.json()['choices'][0]['message']['content']
@@ -167,7 +168,6 @@ def chat_ui():
                 session = st.session_state.active_session
                 st.session_state.sessions[session].append(("You", prompt))
 
-                # Stream the reply
                 streamed_text = ""
                 for word in reply.split():
                     streamed_text += word + " "
@@ -176,10 +176,13 @@ def chat_ui():
 
                 st.session_state.sessions[session].append(("Bot", reply))
                 st.rerun()
+
             except Exception as e:
                 st.error(f"❌ Error: {e}")
+        elif send_clicked:
+            st.warning("Please enter a message.")
 
-# ========== MAIN ==========
+# ========== MAIN ROUTER ==========
 st.markdown("<h2 style='text-align: center;'>🧠 Welcome to the Groq Chatbot</h2>", unsafe_allow_html=True)
 st.markdown("---")
 
