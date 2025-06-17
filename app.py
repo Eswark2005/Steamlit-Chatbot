@@ -68,12 +68,13 @@ def chat_ui():
                 st.session_state.active_session = chat_name
 
         st.markdown("---")
- if st.button("🚪 Logout"):
-    st.session_state.logged_in = False
-    st.session_state.email = ""
-    st.session_state.active_session = None
-    st.rerun()  # New API: No need for st.stop()
-     
+        
+        if st.button("🚪 Logout"):
+            st.session_state.logged_in = False
+            st.session_state.email = ""
+            st.session_state.active_session = None
+            st.rerun()
+
     # ========== MAIN CHAT PANEL ==========
     with right:
         if not st.session_state.active_session:
@@ -193,3 +194,4 @@ if not st.session_state.logged_in:
         signup()
 else:
     chat_ui()
+
