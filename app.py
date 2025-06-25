@@ -4,8 +4,10 @@ import time
 import json
 from datetime import datetime, date
 
+# === PAGE SETUP ===
 st.set_page_config("💬 Chatbot + Planner", layout="wide")
 
+# === SESSION STATE SETUP ===
 def initialize_state():
     defaults = {
         "users": {},
@@ -16,7 +18,6 @@ def initialize_state():
         "view": "chat",
         "planner_tasks": [],
         "last_user_msg": "",
-        "rerun_trigger": False,
         "send_trigger": False
     }
     for key, val in defaults.items():
@@ -24,14 +25,12 @@ def initialize_state():
             st.session_state[key] = val
 initialize_state()
 
-if st.session_state.rerun_trigger:
-    st.session_state.rerun_trigger = False
-    st.experimental_rerun()
-
-GROQ_API_KEY = "your-groq-key"
+# === GROQ CONFIG ===
+GROQ_API_KEY = "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"
 MODEL_ID = "meta-llama/llama-4-scout-17b-16e-instruct"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
+# === AUTH ===
 def login():
     st.subheader("🔓 Login")
     email = st.text_input("Email", key="login_email")
@@ -57,32 +56,33 @@ def signup():
             st.session_state.users[email] = password
             st.success("Account created!")
 
+# === PLANNER UI ===
 def planner_ui():
-    st.title("📆 Your Planner")
+    st.title("🗓️ Daily Task Planner")
     with st.form("planner_form", clear_on_submit=True):
-        col1, col2 = st.columns([4, 2])
-        with col1:
-            task = st.text_input("📝 Task")
-        with col2:
-            due = st.date_input("📅 Due Date", value=date.today())
+        st.markdown("**Add a Task**")
+        cols = st.columns([3, 2])
+        task = cols[0].text_input("Task")
+        due = cols[1].date_input("Due Date", value=date.today())
         add = st.form_submit_button("➕ Add Task")
         if add and task:
             st.session_state.planner_tasks.append({"task": task, "due": str(due), "done": False})
 
-    st.markdown("### 📋 Task List")
-    with st.expander("View & Manage Tasks", expanded=True):
-        updated_tasks = []
-        for i, item in enumerate(st.session_state.planner_tasks):
-            color = "✅" if item["done"] else "🟡"
-            col1, col2, col3 = st.columns([6, 1, 1])
-            with col1:
-                done = st.checkbox(f"{color} {item['task']} (Due: {item['due']})", value=item["done"], key=f"task_{i}")
-            with col2:
-                delete = st.button("❌", key=f"delete_{i}")
-            if not delete:
-                updated_tasks.append({"task": item["task"], "due": item["due"], "done": done})
-        st.session_state.planner_tasks = updated_tasks
+    st.markdown("### 📋 Your Tasks")
+    for i, item in enumerate(st.session_state.planner_tasks):
+        cols = st.columns([5, 1, 1])
+        with cols[0]:
+            st.session_state.planner_tasks[i]["done"] = st.checkbox(
+                f'{item["task"]} (Due: {item["due"]})',
+                value=item["done"],
+                key=f"task_{i}"
+            )
+        with cols[1]:
+            if st.button("🗑️", key=f"delete_{i}"):
+                st.session_state.planner_tasks.pop(i)
+                st.rerun()
 
+# === CHAT UI ===
 def chat_ui():
     left, right = st.columns([1, 4])
     with left:
@@ -107,8 +107,7 @@ def chat_ui():
             st.session_state.logged_in = False
             st.session_state.sessions = {}
             st.session_state.planner_tasks = []
-            st.session_state.rerun_trigger = True
-            st.stop()
+            st.rerun()
 
     with right:
         if st.session_state.view == "planner":
@@ -142,45 +141,42 @@ def chat_ui():
         with col3:
             retry = st.button("Retry")
 
-        # Handle triggers
         if retry and st.session_state.last_user_msg:
             st.session_state.send_trigger = True
+            user_msg = st.session_state.last_user_msg
         elif send and user_msg.strip():
             st.session_state.last_user_msg = user_msg
             st.session_state.send_trigger = True
 
         if st.session_state.send_trigger:
-            with st.spinner("💬 Waiting for Groq..."):
-                st.session_state.send_trigger = False
+            st.session_state.send_trigger = False
+            try:
                 st.session_state.sessions[st.session_state.active_session].append(("You", st.session_state.last_user_msg))
 
-                try:
-                    headers = {
-                        "Authorization": f"Bearer {GROQ_API_KEY}",
-                        "Content-Type": "application/json"
-                    }
-                    data = {
-                        "model": MODEL_ID,
-                        "messages": [{"role": "user", "content": st.session_state.last_user_msg}]
-                    }
+                headers = {
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                data = {
+                    "model": MODEL_ID,
+                    "messages": [{"role": "user", "content": st.session_state.last_user_msg}]
+                }
 
-                    res = requests.post(GROQ_URL, headers=headers, json=data)
-                    res.raise_for_status()
-                    reply = res.json()["choices"][0]["message"]["content"]
+                res = requests.post(GROQ_URL, headers=headers, json=data)
+                res.raise_for_status()
+                reply = res.json()["choices"][0]["message"]["content"]
 
-                    rendered = ""
-                    for word in reply.split():
-                        rendered += word + " "
-                        render_chat(rendered)
-                        time.sleep(0.01)
+                rendered = ""
+                for word in reply.split():
+                    rendered += word + " "
+                    render_chat(rendered)
+                    time.sleep(0.01)
 
-                    st.session_state.sessions[st.session_state.active_session].append(("Bot", reply))
+                st.session_state.sessions[st.session_state.active_session].append(("Bot", reply))
+                st.rerun()
 
-                except Exception:
-                    st.error("❌ Error: Could not get a reply from Groq.")
-                else:
-                    st.session_state.rerun_trigger = True
-                    st.stop()
+            except Exception:
+                st.error("❌ Error: Could not get a reply from Groq.")
 
         if st.button("📥 Save Chat to File"):
             session = st.session_state.sessions[st.session_state.active_session]
@@ -189,14 +185,18 @@ def chat_ui():
                 json.dump(session, f, indent=2)
             st.success(f"Chat saved to {filename}")
 
+# === MAIN ===
 st.markdown("<h2 style='text-align: center;'>🧠 Groq Chatbot + Planner</h2>", unsafe_allow_html=True)
 st.markdown("---")
 
 if not st.session_state.logged_in:
     login_tab, signup_tab = st.tabs(["Login", "Signup"])
-    with login_tab: login()
-    with signup_tab: signup()
+    with login_tab:
+        login()
+    with signup_tab:
+        signup()
 else:
     chat_ui()
+
 
 
