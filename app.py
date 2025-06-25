@@ -17,6 +17,10 @@ if 'sessions' not in st.session_state:
     st.session_state.sessions = {}
 if 'active_session' not in st.session_state:
     st.session_state.active_session = None
+if 'view' not in st.session_state:
+    st.session_state.view = 'chat'  # or 'planner'
+if 'planner_tasks' not in st.session_state:
+    st.session_state.planner_tasks = []
 
 # ========== GROQ CONFIG ==========
 GROQ_API_KEY = "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"
@@ -56,27 +60,55 @@ def chat_ui():
     # ========== SIDEBAR ==========
     with left:
         st.markdown(f"**👤 `{st.session_state.email}`**")
-        st.subheader("📁 Sessions")
+        st.subheader("📁 Navigation")
 
-        if st.button("➕ New Chat"):
-            chat_name = f"Chat {len(st.session_state.sessions) + 1} - {datetime.now().strftime('%H:%M:%S')}"
-            st.session_state.sessions[chat_name] = []
-            st.session_state.active_session = chat_name
+        if st.button("💬 Chat"):
+            st.session_state.view = 'chat'
+        if st.button("🗓️ Planner"):
+            st.session_state.view = 'planner'
 
-        for chat_name in st.session_state.sessions:
-            if st.button(chat_name, key=chat_name):
-                st.session_state.active_session = chat_name
+        if st.session_state.view == 'chat':
+            if st.button("➕ New Chat"):
+                name = f"Chat {len(st.session_state.sessions)+1} - {datetime.now().strftime('%H:%M:%S')}"
+                st.session_state.sessions[name] = []
+                st.session_state.active_session = name
+
+            for chat_name in st.session_state.sessions:
+                if st.button(chat_name, key=chat_name):
+                    st.session_state.active_session = chat_name
 
         st.markdown("---")
-        
         if st.button("🚪 Logout"):
             st.session_state.logged_in = False
             st.session_state.email = ""
             st.session_state.active_session = None
-            st.rerun()
+            st.session_state.view = 'chat'
+            st.experimental_rerun()
 
-    # ========== MAIN CHAT PANEL ==========
+    # ========== MAIN PANEL ==========
     with right:
+        if st.session_state.view == 'planner':
+            st.title("🗓️ Your Planner")
+            new_task = st.text_input("Add a task", key="planner_input")
+            if st.button("Add Task"):
+                if new_task:
+                    st.session_state.planner_tasks.append({"task": new_task, "done": False})
+                else:
+                    st.warning("Please enter a task.")
+
+            for i, task in enumerate(st.session_state.planner_tasks):
+                cols = st.columns([0.8, 0.1, 0.1])
+                with cols[0]:
+                    st.session_state.planner_tasks[i]["done"] = st.checkbox(
+                        task["task"], value=task["done"], key=f"task_{i}"
+                    )
+                with cols[1]:
+                    if st.button("❌", key=f"del_{i}"):
+                        st.session_state.planner_tasks.pop(i)
+                        st.experimental_rerun()
+
+            return  # skip chat if planner is shown
+
         if not st.session_state.active_session:
             st.info("Start a new chat to begin.")
             return
@@ -84,7 +116,7 @@ def chat_ui():
         st.title("💬 Chat with Groq LLaMA 4")
         st.markdown(f"### 🧠 {st.session_state.active_session}")
 
-        # Chat bubble styling
+        # Chatbox Style
         st.markdown("""
         <style>
         .chat-box {
@@ -140,10 +172,8 @@ def chat_ui():
             html += '</div>'
             chat_placeholder.markdown(html, unsafe_allow_html=True)
 
-        # Render chat initially
         render_chat()
 
-        # ========== INPUT + SEND ==========
         col1, col2 = st.columns([5, 1])
         with col1:
             prompt = st.text_input("Your message:", label_visibility="collapsed", placeholder="Type your message here")
@@ -168,6 +198,7 @@ def chat_ui():
                 session = st.session_state.active_session
                 st.session_state.sessions[session].append(("You", prompt))
 
+                # Stream reply
                 streamed_text = ""
                 for word in reply.split():
                     streamed_text += word + " "
