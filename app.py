@@ -1,49 +1,34 @@
 import streamlit as st
 import requests
 import time
-from datetime import datetime
+from datetime import datetime, date
 
-# ========== PAGE CONFIG ==========
-st.set_page_config(page_title="💬 Chatbot | Groq", layout="wide")
+# === PAGE SETUP ===
+st.set_page_config("💬 Chatbot + Planner", layout="wide")
 
-# ========== SESSION STATE SETUP ==========
-defaults = {
+# === SESSION STATE SETUP ===
+for key, val in {
     "users": {},
     "logged_in": False,
     "email": "",
     "sessions": {},
     "active_session": None,
     "view": "chat",
-    "planner_tasks": [],
-    "rerun_flag": False,
-}
-for key, val in defaults.items():
+    "planner_tasks": []
+}.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
-# ========== GROQ CONFIG ==========
+# === GROQ CONFIG ===
 GROQ_API_KEY = "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"
 MODEL_ID = "meta-llama/llama-4-scout-17b-16e-instruct"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# ========== AUTH FUNCTIONS ==========
-def signup():
-    st.subheader("🔐 Signup")
-    email = st.text_input("Email", key="signup_email")
-    password = st.text_input("Password", type="password", key="signup_password")
-    if st.button("Create Account"):
-        if not email or not password:
-            st.warning("Please fill in all fields.")
-        elif email in st.session_state.users:
-            st.error("User already exists.")
-        else:
-            st.session_state.users[email] = password
-            st.success("Account created! You can now log in.")
-
+# === AUTH ===
 def login():
     st.subheader("🔓 Login")
     email = st.text_input("Email", key="login_email")
-    password = st.text_input("Password", type="password", key="login_password")
+    password = st.text_input("Password", type="password", key="login_pass")
     if st.button("Login"):
         if st.session_state.users.get(email) == password:
             st.session_state.logged_in = True
@@ -52,62 +37,65 @@ def login():
         else:
             st.error("Invalid credentials.")
 
-# ========== PLANNER UI ==========
+def signup():
+    st.subheader("🔐 Signup")
+    email = st.text_input("Email", key="signup_email")
+    password = st.text_input("Password", type="password", key="signup_pass")
+    if st.button("Create Account"):
+        if not email or not password:
+            st.warning("Please fill in all fields.")
+        elif email in st.session_state.users:
+            st.error("User already exists.")
+        else:
+            st.session_state.users[email] = password
+            st.success("Account created!")
+
+# === PLANNER UI ===
 def planner_ui():
-    st.title("🗓️ Your Planner")
+    st.title("📆 Your Planner")
     with st.form("planner_form", clear_on_submit=True):
-        task_text = st.text_input("Task", placeholder="e.g., Complete project report")
-        due_date = st.date_input("Due Date")
-        submitted = st.form_submit_button("Add Task")
-        if submitted:
-            if task_text:
-                st.session_state.planner_tasks.append({
-                    "task": task_text,
-                    "due": due_date.strftime("%Y-%m-%d"),
-                    "done": False
-                })
-            else:
-                st.warning("Please enter a task.")
+        task = st.text_input("Task")
+        due = st.date_input("Due Date", value=date.today())
+        add = st.form_submit_button("Add Task")
+        if add and task:
+            st.session_state.planner_tasks.append({"task": task, "due": str(due), "done": False})
 
-    for i, task in enumerate(st.session_state.planner_tasks):
-        cols = st.columns([0.6, 0.2, 0.1, 0.1])
-        with cols[0]:
+    st.write("### 📝 Your Tasks")
+    for i, item in enumerate(st.session_state.planner_tasks):
+        col1, col2, col3 = st.columns([6, 1, 1])
+        with col1:
             st.session_state.planner_tasks[i]["done"] = st.checkbox(
-                f'{task["task"]} (Due: {task["due"]})',
-                value=task["done"],
-                key=f"task_{i}"
+                f'{item["task"]} (Due: {item["due"]})', value=item["done"], key=f"task_{i}"
             )
-        with cols[2]:
-            if st.button("❌", key=f"del_{i}"):
+        with col2:
+            if st.button("❌", key=f"delete_{i}"):
                 st.session_state.planner_tasks.pop(i)
-                st.session_state.rerun_flag = True
-                break
+                st.experimental_rerun()
 
-# ========== CHAT UI ==========
+# === CHAT UI ===
 def chat_ui():
     left, right = st.columns([1, 4])
 
     with left:
-        st.markdown(f"**👤 `{st.session_state.email}`**")
+        st.markdown(f"👤 **{st.session_state.email}**")
         st.subheader("📁 Navigation")
-
-        view = st.radio("Go to", ["💬 Chat", "🗓️ Planner"], label_visibility="collapsed")
-        st.session_state.view = "chat" if view == "💬 Chat" else "planner"
+        st.radio("Select View", ["💬 Chat", "📆 Planner"], key="view_radio")
+        st.session_state.view = "chat" if st.session_state.view_radio == "💬 Chat" else "planner"
 
         if st.session_state.view == "chat":
             if st.button("➕ New Chat"):
                 name = f"Chat {len(st.session_state.sessions)+1} - {datetime.now().strftime('%H:%M:%S')}"
                 st.session_state.sessions[name] = []
                 st.session_state.active_session = name
-
-            for chat_name in st.session_state.sessions:
-                if st.button(chat_name, key=chat_name):
-                    st.session_state.active_session = chat_name
+            for chat in st.session_state.sessions:
+                if st.button(chat, key=chat):
+                    st.session_state.active_session = chat
 
         st.markdown("---")
         if st.button("🚪 Logout"):
-            for key in ["logged_in", "email", "active_session", "view"]:
-                st.session_state[key] = defaults[key]
+            for key in ["logged_in", "email", "active_session"]:
+                st.session_state[key] = ""
+            st.session_state.logged_in = False
             st.experimental_rerun()
 
     with right:
@@ -119,119 +107,67 @@ def chat_ui():
             st.info("Start a new chat to begin.")
             return
 
-        st.title("💬 Chat with Groq LLaMA 4")
-        st.markdown(f"### 🧠 {st.session_state.active_session}")
+        st.title("💬 Chat with Groq")
+        chat_box = st.empty()
 
-        st.markdown("""
-        <style>
-        .chat-box {
-            background-color: #1e1e1e;
-            padding: 20px;
-            height: 500px;
-            overflow-y: auto;
-            border-radius: 10px;
-            border: 1px solid #444;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .bubble {
-            max-width: 70%;
-            padding: 10px 15px;
-            border-radius: 20px;
-            font-size: 15px;
-            word-wrap: break-word;
-            display: inline-block;
-            color: white;
-        }
-        .you {
-            align-self: flex-end;
-            background-color: #4CAF50;
-            border-bottom-right-radius: 0;
-        }
-        .bot {
-            align-self: flex-start;
-            background-color: #3a3a3a;
-            border-bottom-left-radius: 0;
-        }
-        .timestamp {
-            font-size: 10px;
-            color: #aaa;
-            text-align: right;
-            margin-top: -6px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-        chat_placeholder = st.empty()
-
-        def render_chat(streamed_reply=""):
-            html = '<div class="chat-box">'
+        def render_chat(temp_reply=""):
+            html = '<div style="height:500px; overflow-y:auto; padding:1em;">'
             for sender, msg in st.session_state.sessions[st.session_state.active_session]:
-                role = "you" if sender == "You" else "bot"
-                timestamp = datetime.now().strftime("%H:%M")
-                html += f'<div class="bubble {role}">{msg}</div><div class="timestamp">{timestamp}</div>'
-            if streamed_reply:
-                html += f'<div class="bubble bot">{streamed_reply}</div><div class="timestamp">{datetime.now().strftime("%H:%M")}</div>'
-            html += '</div>'
-            chat_placeholder.markdown(html, unsafe_allow_html=True)
+                bubble_color = "#4CAF50" if sender == "You" else "#3a3a3a"
+                html += f'<div style="margin:10px; padding:10px; border-radius:10px; background:{bubble_color}; color:white;">{sender}: {msg}</div>'
+            if temp_reply:
+                html += f'<div style="margin:10px; padding:10px; border-radius:10px; background:#3a3a3a; color:white;">Bot: {temp_reply}</div>'
+            html += "</div>"
+            chat_box.markdown(html, unsafe_allow_html=True)
 
         render_chat()
 
         col1, col2 = st.columns([5, 1])
         with col1:
-            prompt = st.text_input("Your message:", label_visibility="collapsed", placeholder="Type your message here")
+            user_msg = st.text_input("Type your message...", label_visibility="collapsed")
         with col2:
-            send_clicked = st.button("Send")
+            send = st.button("Send")
 
-        if send_clicked and prompt.strip():
+        if send and user_msg.strip():
             try:
+                st.session_state.sessions[st.session_state.active_session].append(("You", user_msg))
+
                 headers = {
                     "Authorization": f"Bearer {GROQ_API_KEY}",
                     "Content-Type": "application/json"
                 }
-                payload = {
+                data = {
                     "model": MODEL_ID,
-                    "messages": [{"role": "user", "content": prompt}]
+                    "messages": [{"role": "user", "content": user_msg}]
                 }
-
-                res = requests.post(GROQ_URL, headers=headers, json=payload)
+                res = requests.post(GROQ_URL, headers=headers, json=data)
                 res.raise_for_status()
-                reply = res.json()['choices'][0]['message']['content']
+                reply = res.json()["choices"][0]["message"]["content"]
 
-                session = st.session_state.active_session
-                st.session_state.sessions[session].append(("You", prompt))
-
-                streamed_text = ""
+                # Simulate streaming
+                rendered = ""
                 for word in reply.split():
-                    streamed_text += word + " "
-                    render_chat(streamed_text)
-                    time.sleep(0.03)
+                    rendered += word + " "
+                    render_chat(rendered)
+                    time.sleep(0.02)
 
-                st.session_state.sessions[session].append(("Bot", reply))
-                st.rerun()
+                st.session_state.sessions[st.session_state.active_session].append(("Bot", reply))
+                st.experimental_rerun()
 
             except Exception as e:
-                st.error(f"❌ Error: {e}")
-        elif send_clicked:
-            st.warning("Please enter a message.")
+                st.error("❌ Error: Could not get a reply from Groq.")
 
-# ========== MAIN ROUTER ==========
-st.markdown("<h2 style='text-align: center;'>🧠 Welcome to the Groq Chatbot</h2>", unsafe_allow_html=True)
+# === MAIN ===
+st.markdown("<h2 style='text-align: center;'>🧠 Groq Chatbot + Planner</h2>", unsafe_allow_html=True)
 st.markdown("---")
 
 if not st.session_state.logged_in:
-    tab1, tab2 = st.tabs(["Login", "Signup"])
-    with tab1:
-        login()
-    with tab2:
-        signup()
+    login_tab, signup_tab = st.tabs(["Login", "Signup"])
+    with login_tab: login()
+    with signup_tab: signup()
 else:
-    if st.session_state.rerun_flag:
-        st.session_state.rerun_flag = False
-        st.experimental_rerun()
     chat_ui()
+
 
 
 
