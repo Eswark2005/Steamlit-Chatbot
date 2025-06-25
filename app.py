@@ -61,16 +61,18 @@ def planner_ui():
             st.session_state.planner_tasks.append({"task": task, "due": str(due), "done": False})
 
     st.write("### 📝 Your Tasks")
+    updated_tasks = []
     for i, item in enumerate(st.session_state.planner_tasks):
         col1, col2, col3 = st.columns([6, 1, 1])
         with col1:
-            st.session_state.planner_tasks[i]["done"] = st.checkbox(
+            done = st.checkbox(
                 f'{item["task"]} (Due: {item["due"]})', value=item["done"], key=f"task_{i}"
             )
         with col2:
-            if st.button("❌", key=f"delete_{i}"):
-                st.session_state.planner_tasks.pop(i)
-                st.experimental_rerun()
+            delete = st.button("❌", key=f"delete_{i}")
+        if not delete:
+            updated_tasks.append({"task": item["task"], "due": item["due"], "done": done})
+    st.session_state.planner_tasks = updated_tasks
 
 # === CHAT UI ===
 def chat_ui():
@@ -96,6 +98,8 @@ def chat_ui():
             for key in ["logged_in", "email", "active_session"]:
                 st.session_state[key] = ""
             st.session_state.logged_in = False
+            st.session_state.sessions = {}
+            st.session_state.planner_tasks = []
             st.experimental_rerun()
 
     with right:
@@ -167,7 +171,6 @@ if not st.session_state.logged_in:
     with signup_tab: signup()
 else:
     chat_ui()
-
 
 
 
