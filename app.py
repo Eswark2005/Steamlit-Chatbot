@@ -7,20 +7,18 @@ from datetime import datetime
 st.set_page_config(page_title="💬 Chatbot | Groq", layout="wide")
 
 # ========== SESSION STATE SETUP ==========
-if 'users' not in st.session_state:
-    st.session_state.users = {}
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'email' not in st.session_state:
-    st.session_state.email = ""
-if 'sessions' not in st.session_state:
-    st.session_state.sessions = {}
-if 'active_session' not in st.session_state:
-    st.session_state.active_session = None
-if 'view' not in st.session_state:
-    st.session_state.view = 'chat'  # or 'planner'
-if 'planner_tasks' not in st.session_state:
-    st.session_state.planner_tasks = []
+defaults = {
+    "users": {},
+    "logged_in": False,
+    "email": "",
+    "sessions": {},
+    "active_session": None,
+    "view": "chat",
+    "planner_tasks": [],
+}
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 # ========== GROQ CONFIG ==========
 GROQ_API_KEY = "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"
@@ -62,12 +60,10 @@ def chat_ui():
         st.markdown(f"**👤 `{st.session_state.email}`**")
         st.subheader("📁 Navigation")
 
-        if st.button("💬 Chat"):
-            st.session_state.view = 'chat'
-        if st.button("🗓️ Planner"):
-            st.session_state.view = 'planner'
+        view = st.radio("Go to", ["💬 Chat", "🗓️ Planner"], label_visibility="collapsed")
+        st.session_state.view = "chat" if view == "💬 Chat" else "planner"
 
-        if st.session_state.view == 'chat':
+        if st.session_state.view == "chat":
             if st.button("➕ New Chat"):
                 name = f"Chat {len(st.session_state.sessions)+1} - {datetime.now().strftime('%H:%M:%S')}"
                 st.session_state.sessions[name] = []
@@ -79,15 +75,13 @@ def chat_ui():
 
         st.markdown("---")
         if st.button("🚪 Logout"):
-            st.session_state.logged_in = False
-            st.session_state.email = ""
-            st.session_state.active_session = None
-            st.session_state.view = 'chat'
+            for key in ["logged_in", "email", "active_session", "view"]:
+                st.session_state[key] = defaults[key]
             st.experimental_rerun()
 
     # ========== MAIN PANEL ==========
     with right:
-        if st.session_state.view == 'planner':
+        if st.session_state.view == "planner":
             st.title("🗓️ Your Planner")
             new_task = st.text_input("Add a task", key="planner_input")
             if st.button("Add Task"):
@@ -106,8 +100,7 @@ def chat_ui():
                     if st.button("❌", key=f"del_{i}"):
                         st.session_state.planner_tasks.pop(i)
                         st.experimental_rerun()
-
-            return  # skip chat if planner is shown
+            return
 
         if not st.session_state.active_session:
             st.info("Start a new chat to begin.")
@@ -116,7 +109,6 @@ def chat_ui():
         st.title("💬 Chat with Groq LLaMA 4")
         st.markdown(f"### 🧠 {st.session_state.active_session}")
 
-        # Chatbox Style
         st.markdown("""
         <style>
         .chat-box {
@@ -198,7 +190,6 @@ def chat_ui():
                 session = st.session_state.active_session
                 st.session_state.sessions[session].append(("You", prompt))
 
-                # Stream reply
                 streamed_text = ""
                 for word in reply.split():
                     streamed_text += word + " "
@@ -225,4 +216,5 @@ if not st.session_state.logged_in:
         signup()
 else:
     chat_ui()
+
 
