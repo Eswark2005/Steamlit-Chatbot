@@ -224,7 +224,7 @@ else:
         if st.session_state.view == "planner":
             planner_ui()
         else:
-            chat_ui()
+            chat_ui(
 
 
 
