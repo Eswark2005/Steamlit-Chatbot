@@ -5,7 +5,7 @@ import json
 from datetime import datetime, date
 
 # === PAGE SETUP ===
-st.set_page_config("\U0001F4AC Chatbot + Planner", layout="wide")
+st.set_page_config("💬 Chatbot + Planner", layout="wide")
 
 # === SESSION STATE SETUP ===
 def initialize_state():
@@ -18,13 +18,15 @@ def initialize_state():
         "view": "chat",
         "planner_tasks": [],
         "last_user_msg": "",
-        "rerun_trigger": False
+        "rerun_trigger": False,
+        "send_trigger": False
     }
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
 initialize_state()
 
+# Handle safe rerun trigger
 if st.session_state.rerun_trigger:
     st.session_state.rerun_trigger = False
     st.experimental_rerun()
@@ -36,7 +38,7 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # === AUTH ===
 def login():
-    st.subheader("\U0001F513 Login")
+    st.subheader("🔓 Login")
     email = st.text_input("Email", key="login_email")
     password = st.text_input("Password", type="password", key="login_pass")
     if st.button("Login"):
@@ -48,7 +50,7 @@ def login():
             st.error("Invalid credentials.")
 
 def signup():
-    st.subheader("\U0001F510 Signup")
+    st.subheader("🔐 Signup")
     email = st.text_input("Email", key="signup_email")
     password = st.text_input("Password", type="password", key="signup_pass")
     if st.button("Create Account"):
@@ -62,7 +64,7 @@ def signup():
 
 # === PLANNER UI ===
 def planner_ui():
-    st.title("\U0001F4C6 Your Planner")
+    st.title("📆 Your Planner")
     with st.form("planner_form", clear_on_submit=True):
         task = st.text_input("Task")
         due = st.date_input("Due Date", value=date.today())
@@ -70,7 +72,7 @@ def planner_ui():
         if add and task:
             st.session_state.planner_tasks.append({"task": task, "due": str(due), "done": False})
 
-    st.write("### \U0001F4DD Your Tasks")
+    st.write("### 📝 Your Tasks")
     updated_tasks = []
     for i, item in enumerate(st.session_state.planner_tasks):
         col1, col2 = st.columns([6, 1])
@@ -89,10 +91,10 @@ def chat_ui():
     left, right = st.columns([1, 4])
 
     with left:
-        st.markdown(f"\U0001F464 **{st.session_state.email}**")
-        st.subheader("\U0001F4C1 Navigation")
-        st.radio("Select View", ["\U0001F4AC Chat", "\U0001F4C6 Planner"], key="view_radio")
-        st.session_state.view = "chat" if st.session_state.view_radio == "\U0001F4AC Chat" else "planner"
+        st.markdown(f"👤 **{st.session_state.email}**")
+        st.subheader("📁 Navigation")
+        st.radio("Select View", ["💬 Chat", "📆 Planner"], key="view_radio")
+        st.session_state.view = "chat" if st.session_state.view_radio == "💬 Chat" else "planner"
 
         if st.session_state.view == "chat":
             if st.button("➕ New Chat"):
@@ -104,7 +106,7 @@ def chat_ui():
                     st.session_state.active_session = chat
 
         st.markdown("---")
-        if st.button("\U0001F6AA Logout"):
+        if st.button("🚪 Logout"):
             for key in ["logged_in", "email", "active_session"]:
                 st.session_state[key] = ""
             st.session_state.logged_in = False
@@ -122,7 +124,7 @@ def chat_ui():
             st.info("Start a new chat to begin.")
             return
 
-        st.title("\U0001F4AC Chat with Groq")
+        st.title("💬 Chat with Groq")
         chat_box = st.empty()
 
         def render_chat(temp_reply=""):
@@ -139,19 +141,22 @@ def chat_ui():
 
         col1, col2, col3 = st.columns([4, 1, 1])
         with col1:
-            user_msg = st.text_input("Type your message...", label_visibility="collapsed")
+            user_msg = st.text_input("Type your message...", label_visibility="collapsed", key="input_msg")
         with col2:
             send = st.button("Send")
         with col3:
             retry = st.button("Retry")
 
         if retry and st.session_state.last_user_msg:
+            st.session_state.send_trigger = True
             user_msg = st.session_state.last_user_msg
-            send = True
-
-        if send and user_msg.strip():
+        elif send and user_msg.strip():
             st.session_state.last_user_msg = user_msg
-            st.session_state.sessions[st.session_state.active_session].append(("You", user_msg))
+            st.session_state.send_trigger = True
+
+        if st.session_state.send_trigger:
+            st.session_state.send_trigger = False
+            st.session_state.sessions[st.session_state.active_session].append(("You", st.session_state.last_user_msg))
 
             try:
                 headers = {
@@ -160,7 +165,7 @@ def chat_ui():
                 }
                 data = {
                     "model": MODEL_ID,
-                    "messages": [{"role": "user", "content": user_msg}]
+                    "messages": [{"role": "user", "content": st.session_state.last_user_msg}]
                 }
 
                 res = requests.post(GROQ_URL, headers=headers, json=data)
@@ -175,13 +180,13 @@ def chat_ui():
 
                 st.session_state.sessions[st.session_state.active_session].append(("Bot", reply))
 
-            except Exception:
+            except Exception as e:
                 st.error("❌ Error: Could not get a reply from Groq.")
             else:
                 st.session_state.rerun_trigger = True
                 st.stop()
 
-        if st.button("\U0001F4E5 Save Chat to File"):
+        if st.button("📥 Save Chat to File"):
             session = st.session_state.sessions[st.session_state.active_session]
             filename = f"chat_{st.session_state.active_session.replace(':', '-')}.json"
             with open(filename, "w") as f:
@@ -189,7 +194,7 @@ def chat_ui():
             st.success(f"Chat saved to {filename}")
 
 # === MAIN ===
-st.markdown("<h2 style='text-align: center;'>\U0001F9E0 Groq Chatbot + Planner</h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center;'>🧠 Groq Chatbot + Planner</h2>", unsafe_allow_html=True)
 st.markdown("---")
 
 if not st.session_state.logged_in:
@@ -200,3 +205,4 @@ if not st.session_state.logged_in:
         signup()
 else:
     chat_ui()
+
