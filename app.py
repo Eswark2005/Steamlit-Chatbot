@@ -19,7 +19,7 @@ if 'active_session' not in st.session_state:
     st.session_state.active_session = None
 
 # ========== GROQ CONFIG ==========
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 MODEL_ID = "meta-llama/llama-4-scout-17b-16e-instruct"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
