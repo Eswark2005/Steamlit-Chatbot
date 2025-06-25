@@ -1,23 +1,28 @@
 import streamlit as st
 import requests
 import time
+import json
 from datetime import datetime, date
 
 # === PAGE SETUP ===
 st.set_page_config("💬 Chatbot + Planner", layout="wide")
 
 # === SESSION STATE SETUP ===
-for key, val in {
-    "users": {},
-    "logged_in": False,
-    "email": "",
-    "sessions": {},
-    "active_session": None,
-    "view": "chat",
-    "planner_tasks": []
-}.items():
-    if key not in st.session_state:
-        st.session_state[key] = val
+def initialize_state():
+    defaults = {
+        "users": {},
+        "logged_in": False,
+        "email": "",
+        "sessions": {},
+        "active_session": None,
+        "view": "chat",
+        "planner_tasks": [],
+        "last_user_msg": ""
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
+initialize_state()
 
 # === GROQ CONFIG ===
 GROQ_API_KEY = "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"
@@ -126,16 +131,23 @@ def chat_ui():
 
         render_chat()
 
-        col1, col2 = st.columns([5, 1])
+        col1, col2, col3 = st.columns([4, 1, 1])
         with col1:
             user_msg = st.text_input("Type your message...", label_visibility="collapsed")
         with col2:
             send = st.button("Send")
+        with col3:
+            retry = st.button("Retry")
+
+        if retry and st.session_state.last_user_msg:
+            user_msg = st.session_state.last_user_msg
+            send = True
 
         if send and user_msg.strip():
-            try:
-                st.session_state.sessions[st.session_state.active_session].append(("You", user_msg))
+            st.session_state.last_user_msg = user_msg
+            st.session_state.sessions[st.session_state.active_session].append(("You", user_msg))
 
+            try:
                 headers = {
                     "Authorization": f"Bearer {GROQ_API_KEY}",
                     "Content-Type": "application/json"
@@ -144,22 +156,30 @@ def chat_ui():
                     "model": MODEL_ID,
                     "messages": [{"role": "user", "content": user_msg}]
                 }
+
                 res = requests.post(GROQ_URL, headers=headers, json=data)
                 res.raise_for_status()
                 reply = res.json()["choices"][0]["message"]["content"]
 
-                # Simulate streaming
                 rendered = ""
                 for word in reply.split():
                     rendered += word + " "
                     render_chat(rendered)
-                    time.sleep(0.02)
+                    time.sleep(0.01)
 
                 st.session_state.sessions[st.session_state.active_session].append(("Bot", reply))
-                st.experimental_rerun()
 
             except Exception as e:
                 st.error("❌ Error: Could not get a reply from Groq.")
+            else:
+                st.experimental_rerun()
+
+        if st.button("📥 Save Chat to File"):
+            session = st.session_state.sessions[st.session_state.active_session]
+            filename = f"chat_{st.session_state.active_session.replace(':', '-')}.json"
+            with open(filename, "w") as f:
+                json.dump(session, f, indent=2)
+            st.success(f"Chat saved to {filename}")
 
 # === MAIN ===
 st.markdown("<h2 style='text-align: center;'>🧠 Groq Chatbot + Planner</h2>", unsafe_allow_html=True)
@@ -171,6 +191,7 @@ if not st.session_state.logged_in:
     with signup_tab: signup()
 else:
     chat_ui()
+
 
 
 
